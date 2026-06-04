@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="skyg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3a1d6e"/>
+      <stop offset="0.5" stop-color="#5b2a9e"/>
+      <stop offset="1" stop-color="#ff5fae"/>
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="720" fill="url(#skyg)"/>
+  <circle cx="640" cy="430" r="160" fill="#ffd319" opacity="0.9"/>
+  <circle cx="640" cy="430" r="210" fill="#ffd319" opacity="0.15"/>
+  <g fill="#fff" opacity="0.85">
+    <ellipse cx="240" cy="180" rx="90" ry="34"/>
+    <ellipse cx="320" cy="200" rx="70" ry="28"/>
+    <ellipse cx="1000" cy="140" rx="100" ry="36"/>
+    <ellipse cx="1080" cy="160" rx="64" ry="26"/>
+  </g>
+  <g fill="#2a1248" opacity="0.8">
+    <polygon points="0,720 0,520 220,560 460,500 720,560 980,500 1280,560 1280,720"/>
+  </g>
+</svg>

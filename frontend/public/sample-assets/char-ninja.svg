@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 40" shape-rendering="crispEdges">
+  <!-- head wrap -->
+  <rect x="9" y="4" width="14" height="10" fill="#16203a"/>
+  <rect x="9" y="8" width="14" height="3" fill="#0c1220"/>
+  <rect x="11" y="8" width="3" height="2" fill="#ff2e88"/>
+  <rect x="18" y="8" width="3" height="2" fill="#ff2e88"/>
+  <rect x="20" y="3" width="6" height="2" fill="#1f2a4a"/>
+  <!-- body -->
+  <rect x="9" y="14" width="14" height="12" fill="#1b2540"/>
+  <rect x="13" y="14" width="6" height="12" fill="#27345c"/>
+  <rect x="14" y="15" width="4" height="6" fill="#ff2e88" opacity="0.5"/>
+  <!-- arms -->
+  <rect x="6" y="15" width="3" height="9" fill="#131b30"/>
+  <rect x="23" y="15" width="3" height="9" fill="#131b30"/>
+  <!-- legs -->
+  <rect x="10" y="26" width="4" height="10" fill="#10182c"/>
+  <rect x="18" y="26" width="4" height="10" fill="#10182c"/>
+  <rect x="9" y="36" width="6" height="3" fill="#070b16"/>
+  <rect x="17" y="36" width="6" height="3" fill="#070b16"/>
+</svg>

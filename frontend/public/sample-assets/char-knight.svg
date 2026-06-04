@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 40" shape-rendering="crispEdges">
+  <g>
+    <!-- sword -->
+    <rect x="25" y="6" width="2" height="20" fill="#bff7ff"/>
+    <rect x="24" y="24" width="4" height="2" fill="#8a93b8"/>
+    <rect x="25" y="26" width="2" height="6" fill="#5a6489"/>
+    <!-- helmet -->
+    <rect x="9" y="3" width="12" height="9" fill="#8a93b8"/>
+    <rect x="9" y="3" width="12" height="2" fill="#aeb6d6"/>
+    <rect x="11" y="7" width="8" height="3" fill="#141a33"/>
+    <rect x="12" y="8" width="2" height="2" fill="#4deeea"/>
+    <rect x="16" y="8" width="2" height="2" fill="#4deeea"/>
+    <!-- body armor -->
+    <rect x="8" y="12" width="14" height="14" fill="#2b50c8"/>
+    <rect x="8" y="12" width="14" height="2" fill="#4a73f0"/>
+    <rect x="13" y="14" width="4" height="10" fill="#7da2ff"/>
+    <!-- arms -->
+    <rect x="5" y="13" width="3" height="10" fill="#22408f"/>
+    <rect x="22" y="13" width="3" height="10" fill="#22408f"/>
+    <!-- legs -->
+    <rect x="10" y="26" width="4" height="10" fill="#1c2440"/>
+    <rect x="16" y="26" width="4" height="10" fill="#1c2440"/>
+    <rect x="9" y="36" width="6" height="3" fill="#0e1326"/>
+    <rect x="16" y="36" width="6" height="3" fill="#0e1326"/>
+  </g>
+</svg>
