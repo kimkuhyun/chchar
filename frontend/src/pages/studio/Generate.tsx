@@ -1,154 +1,164 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Sparkles, Dice5, Cpu, FlaskConical, AlertTriangle, Plug, Loader2, Scissors } from 'lucide-react'
-import { useStudio } from '../../store/studio'
+import { Sparkles, Wand2, Shuffle, Cpu } from 'lucide-react'
 import PageHeader from '../../ui/PageHeader'
-import Card from '../../ui/Card'
 import Button from '../../ui/Button'
-import { ROLE_LABEL } from '../../types'
-import { generateSheet, pingComfy } from '../../lib/comfy'
+import Badge from '../../ui/Badge'
+import ModelCacheBadge from '../../components/ModelCacheBadge'
+import GenerationProgress from '../../components/GenerationProgress'
+import UnsupportedNotice from '../../components/UnsupportedNotice'
+import { useStudio } from '../../store/studio'
+import { WORKFLOW_PURPOSE_LABEL } from '../../types'
 
-const EXAMPLES = ['은빛 갑옷의 기사, 파란 망토', '네온 사이버펑크 닌자', '떠다니는 수정 동굴 배경', '용암 함정이 있는 화산 플랫폼']
+const SUGGESTIONS = [
+  '용맹한 기사, 갑옷, 정면',
+  '엘프 궁수, 후드, 옆모습',
+  '마법사 지팡이, 오크 가지, 단일',
+  '돌멩이 더미, 무광',
+]
 
 export default function Generate() {
   const navigate = useNavigate()
-  const presets = useStudio((s) => s.presets).filter((p) => p.isActive)
-  const enqueueJob = useStudio((s) => s.enqueueJob)
-  const gpu = useStudio((s) => s.gpu)
-  const [presetId, setPresetId] = useState(presets[0]?.id)
-  const [prompt, setPrompt] = useState('')
-  const [batch, setBatch] = useState(4)
+  const workflows = useStudio((s) => s.workflows)
+  const generation = useStudio((s) => s.generation)
+  const generate = useStudio((s) => s.generate)
+  const cancel = useStudio((s) => s.cancelGeneration)
+  const cap = useStudio((s) => s.webgpu)
+  const [workflowId, setWorkflowId] = useState(workflows[0]?.id ?? 0)
+  const [prompt, setPrompt] = useState(SUGGESTIONS[0])
+  const [seed, setSeed] = useState(0)
+  const [open, setOpen] = useState(false)
+  const wf = workflows.find((w) => w.id === workflowId)
 
-  const preset = presets.find((p) => p.id === presetId) ?? presets[0]
-  const online = gpu.status === 'online'
-  const canSubmit = prompt.trim().length > 0 && !!preset && online
-
-  const submit = () => {
-    if (!canSubmit) return
-    enqueueJob(prompt.trim(), preset.id, batch)
-    navigate('/studio/queue')
+  if (cap && cap.level !== 'ok') {
+    return (
+      <div className="p-6">
+        <PageHeader eyebrow="파츠 생성" icon={Sparkles} title="새 파츠 만들기" />
+        <UnsupportedNotice variant="gate" action={<Button onClick={() => navigate('/explore/parts')}>공개 파츠 보기</Button>} />
+      </div>
+    )
   }
 
-  // 실제 ComfyUI 연동 (베타)
-  const [comfy, setComfy] = useState<{ ok: boolean; version?: string } | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [elapsed, setElapsed] = useState(0)
-  const [resultUrl, setResultUrl] = useState<string | null>(null)
-  const [err, setErr] = useState<string | null>(null)
-  useEffect(() => { pingComfy().then(setComfy) }, [])
-
-  const realGenerate = async () => {
-    if (!prompt.trim()) return
-    setBusy(true); setErr(null); setResultUrl(null); setElapsed(0)
-    try {
-      const url = await generateSheet(prompt.trim(), { onTick: setElapsed })
-      setResultUrl(url)
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e))
-    } finally {
-      setBusy(false)
-    }
+  const run = async () => {
+    setOpen(true)
+    await generate(workflowId, prompt)
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-6 py-8 md:px-10">
-      <PageHeader eyebrow="컨셉 한 줄이면 충분해요" icon={Sparkles} title="에셋 생성" />
+    <div className="p-6 md:p-8">
+      <PageHeader
+        eyebrow="파츠 생성"
+        icon={Sparkles}
+        title="새 파츠 만들기"
+        desc="워크플로우 + 프롬프트 → 브라우저 WebGPU에서 추론 → 라이브러리에 저장"
+        actions={
+          <span className="flex items-center gap-1.5 rounded-lg border border-[var(--color-line)] bg-white px-2.5 py-1.5 text-xs text-[var(--color-dim)]">
+            <Cpu size={12} className="text-[var(--color-primary)]" /> WebGPU · VRAM ≈ {cap?.vramGuessGb}GB
+          </span>
+        }
+      />
 
-      {!online && (
-        <Card className="mb-5 flex items-center gap-3 border-[#ffd9a8] bg-[#fff8ee] p-4">
-          <AlertTriangle size={18} className="text-[var(--color-warn)]" />
-          <div className="flex-1 text-sm">
-            <b>GPU가 오프라인입니다.</b> <span className="text-[var(--color-dim)]">생성하려면 내 ComfyUI 연결이 필요해요.</span>
-          </div>
-          <Button size="sm" variant="ghost" onClick={() => navigate('/studio/gpu')}><Cpu size={15} /> 연결하기</Button>
-        </Card>
-      )}
-
-      <Card className="p-6 md:p-7">
-        <label className="label">컨셉 프롬프트</label>
-        <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={3} placeholder="예: 은빛 갑옷의 기사, 파란 망토, 빛나는 검" className="textarea" />
-
-        <div className="mt-3 flex flex-wrap gap-2">
-          {EXAMPLES.map((ex) => (
-            <button key={ex} className="chip" onClick={() => setPrompt(ex)}><Dice5 size={12} /> {ex}</button>
-          ))}
-        </div>
-
-        <label className="label mt-6">스타일 프리셋</label>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          {presets.map((p) => {
-            const sel = p.id === presetId
-            return (
-              <button key={p.id} onClick={() => setPresetId(p.id)} className={`rounded-xl border p-4 text-left transition ${sel ? 'border-[var(--color-primary)] bg-[rgba(109,94,252,0.06)] shadow-[0_0_0_3px_rgba(109,94,252,0.1)]' : 'border-[var(--color-line2)] hover:border-[var(--color-primary)]'}`}>
-                <div className="text-xs text-[var(--color-faint)]">{ROLE_LABEL[p.role]}{p.ownerId === null ? ' · 공식' : ''}</div>
-                <div className="mt-0.5 font-semibold">{p.name}</div>
-                <div className="mt-2 truncate text-[11px] text-[var(--color-faint)]">{p.lora ?? p.checkpoint.replace('.safetensors', '')}</div>
-              </button>
-            )
-          })}
-        </div>
-
-        <div className="mt-6 flex items-center gap-4">
-          <label className="label mb-0">배치 수량</label>
-          <input type="range" min={1} max={8} value={batch} onChange={(e) => setBatch(Number(e.target.value))} className="max-w-xs flex-1" />
-          <span className="text-sm font-semibold text-[var(--color-primary)]">{batch}장</span>
-        </div>
-
-        {preset && (
-          <div className="mt-5 rounded-xl border border-[var(--color-line)] bg-[var(--color-surface2)] p-3">
-            <div className="mb-1 flex items-center gap-1.5 text-[11px] text-[var(--color-faint)]"><Cpu size={12} /> 내 ComfyUI 전송 프롬프트</div>
-            <code className="block text-[12px] leading-relaxed text-[var(--color-dim)]">
-              <span className="text-[var(--color-primary)]">{preset.promptPrefix}</span>{prompt || '〈프롬프트〉'}<span className="text-[var(--color-accent)]">{preset.promptSuffix}</span>
-            </code>
-          </div>
-        )}
-
-        <div className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-[#f3c6cf] bg-[#fff0f3] px-3 py-1 text-xs text-[var(--color-danger)]">
-          <FlaskConical size={12} /> 목업 — 실제 ComfyUI 호출이 아니라 시뮬레이션됩니다
-        </div>
-
-        <div className="mt-6 flex items-center justify-between">
-          <div className="text-xs text-[var(--color-faint)]">예상 ~{Math.round((preset?.steps ?? 28) * 1.4 * batch)}초 · 내 GPU 순차 생성</div>
-          <Button size="lg" onClick={submit} disabled={!canSubmit}><Sparkles size={18} /> 생성 시작</Button>
-        </div>
-      </Card>
-
-      {/* 실제 ComfyUI 연동 (베타) */}
-      <Card className="mt-5 p-6">
-        <div className="mb-3 flex items-center gap-2">
-          <Plug size={16} className="text-[var(--color-primary)]" />
-          <span className="font-semibold">내 ComfyUI로 실제 생성</span>
-          <span className="rounded-full bg-[rgba(109,94,252,0.1)] px-2 py-0.5 text-[10px] font-semibold text-[var(--color-primary)]">베타</span>
-          {comfy && (comfy.ok ? (
-            <span className="ml-auto flex items-center gap-1.5 text-xs text-[var(--color-success)]"><span className="dot dot-on" /> 연결됨 {comfy.version && `v${comfy.version}`}</span>
-          ) : (
-            <span className="ml-auto flex items-center gap-1.5 text-xs text-[var(--color-danger)]"><span className="dot dot-off" /> ComfyUI 꺼짐 (localhost:8000)</span>
-          ))}
-        </div>
-        <p className="mb-3 text-xs text-[var(--color-dim)]">표준 레시피(WAI-illustrious + rpg LoRA)로 멀티뷰 시트 1장을 생성합니다. 위 프롬프트의 캐릭터 설명이 그대로 들어가요. 생성 후 <b>슬라이서</b>에서 방향별로 자르면 됩니다.</p>
-        <div className="flex items-center gap-3">
-          <Button onClick={realGenerate} disabled={busy || !prompt.trim() || !comfy?.ok}>
-            {busy ? <><Loader2 size={16} className="animate-spin" /> 생성 중…</> : <><Sparkles size={16} /> 시트 생성</>}
-          </Button>
-          {busy && (
-            <div className="flex items-center gap-2 text-xs text-[var(--color-faint)]">
-              <Loader2 size={13} className="animate-spin" /> 생성 중… {Math.floor(elapsed / 1000)}초 <span className="text-[var(--color-faint)]">(보통 30~60초)</span>
-            </div>
-          )}
-        </div>
-        {err && <div className="mt-3 rounded-lg border border-[#f3c6cf] bg-[#fff0f3] p-2.5 text-xs text-[var(--color-danger)]">{err}</div>}
-        {resultUrl && (
-          <div className="mt-4">
-            <div className="mb-2 text-xs font-semibold text-[var(--color-dim)]">생성된 시트</div>
-            <div className="inline-block rounded-xl border border-[var(--color-line)] p-2" style={{ background: 'repeating-conic-gradient(#eef0f4 0% 25%, #fff 0% 50%) 0 0 / 18px 18px' }}>
-              <img src={resultUrl} alt="생성된 시트" className="max-h-80 rounded-lg" />
-            </div>
-            <div className="mt-2">
-              <Button variant="ghost" size="sm" onClick={() => navigate('/studio/slicer')}><Scissors size={14} /> 슬라이서로 가기</Button>
+      <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
+        <div className="space-y-5">
+          <div className="card p-5">
+            <div className="label">워크플로우 선택</div>
+            <div className="grid gap-2 md:grid-cols-2">
+              {workflows.map((w) => (
+                <button
+                  key={w.id}
+                  onClick={() => setWorkflowId(w.id)}
+                  className={`rounded-xl border p-3 text-left transition ${
+                    workflowId === w.id
+                      ? 'border-[var(--color-primary)] bg-[rgba(109,94,252,0.05)]'
+                      : 'border-[var(--color-line)] bg-white hover:border-[var(--color-line2)]'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold">{w.name}</span>
+                    <Badge>{WORKFLOW_PURPOSE_LABEL[w.purpose]}</Badge>
+                  </div>
+                  <div className="mt-1 text-xs text-[var(--color-dim)] line-clamp-2">{w.description}</div>
+                  <div className="mt-2 flex items-center gap-2">
+                    <span className="badge badge-soft text-[10.5px]">{w.baseModel}</span>
+                    <ModelCacheBadge weights={w.weights} />
+                  </div>
+                </button>
+              ))}
             </div>
           </div>
-        )}
-      </Card>
+
+          <div className="card p-5">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="label mb-0">프롬프트</div>
+              <div className="flex gap-1.5">
+                {SUGGESTIONS.map((s) => (
+                  <button key={s} onClick={() => setPrompt(s)} className="chip" title={s}>
+                    {s.length > 14 ? s.slice(0, 14) + '…' : s}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={4} className="textarea" />
+            {wf && (
+              <div className="mt-2 text-xs text-[var(--color-faint)]">
+                <span className="opacity-70">{wf.promptPrefix}</span>
+                <b className="text-[var(--color-ink)]">{'{프롬프트}'}</b>
+                <span className="opacity-70">{wf.promptSuffix}</span>
+              </div>
+            )}
+
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <div>
+                <div className="label">시드</div>
+                <div className="flex gap-2">
+                  <input type="number" value={seed} onChange={(e) => setSeed(Number(e.target.value))} className="input" />
+                  <Button variant="ghost" onClick={() => setSeed(Math.floor(Math.random() * 900000))}>
+                    <Shuffle size={14} />
+                  </Button>
+                </div>
+              </div>
+              <div>
+                <div className="label">샘플링 스텝 (자동)</div>
+                <input className="input" value={wf?.baseModel === 'sd15-lcm' ? '4 (LCM)' : wf?.baseModel === 'sdxl-turbo-int8' ? '2 (Turbo)' : '24'} disabled />
+              </div>
+            </div>
+
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <Button onClick={run} disabled={!prompt.trim() || generation.stage !== 'idle' && generation.stage !== 'done'}>
+                <Wand2 size={15} /> 생성
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <aside className="space-y-4">
+          <div className="card p-5">
+            <h3 className="text-sm font-bold">자동 후처리</h3>
+            <ul className="mt-2 space-y-1 text-xs text-[var(--color-dim)]">
+              <li>· RMBG로 배경 제거 (투명 PNG)</li>
+              <li>· anchor 자동 측정</li>
+              <li>· 멀티뷰는 슬라이서에서 kind 분할</li>
+            </ul>
+          </div>
+          <div className="card p-5">
+            <h3 className="text-sm font-bold">팁</h3>
+            <ul className="mt-2 space-y-1 text-xs text-[var(--color-dim)]">
+              <li>· 정면·측면·후면을 따로 만들어 슬롯에 맞춰주세요</li>
+              <li>· 8GB VRAM에선 SD1.5/LCM이 가장 안정적</li>
+              <li>· SDXL-Turbo는 1~2스텝으로 빠른 무기/방패용</li>
+            </ul>
+          </div>
+        </aside>
+      </div>
+
+      <GenerationProgress
+        open={open}
+        state={generation}
+        onClose={() => setOpen(false)}
+        onCancel={() => { cancel(); setOpen(false) }}
+        onRetry={run}
+        onUse={() => navigate('/studio/slicer')}
+      />
     </div>
   )
 }

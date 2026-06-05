@@ -1,38 +1,60 @@
-import { useNavigate } from 'react-router-dom'
-import { Wand2, ArrowLeft } from 'lucide-react'
-import { useStudio } from '../../store/studio'
+import { useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { Wand2, ArrowRight, Mail, KeyRound } from 'lucide-react'
 import Button from '../../ui/Button'
-import Card from '../../ui/Card'
+import { useStudio } from '../../store/studio'
 
 export default function Login() {
   const navigate = useNavigate()
   const login = useStudio((s) => s.login)
-  const go = () => {
-    login()
+  const [email, setEmail] = useState('rngus225@gmail.com')
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault()
+    login(email)
     navigate('/studio')
   }
+
   return (
-    <div className="grid min-h-screen place-items-center px-5">
-      <div className="w-full max-w-sm">
-        <button onClick={() => navigate('/')} className="mb-4 flex items-center gap-1 text-sm text-[var(--color-dim)] hover:text-[var(--color-ink)]">
-          <ArrowLeft size={15} /> 홈으로
-        </button>
-        <Card className="p-8 text-center">
-          <div className="brand-bg mx-auto grid h-14 w-14 place-items-center rounded-2xl text-white shadow-lg">
-            <Wand2 size={26} />
+    <div className="min-h-screen">
+      <div className="mx-auto grid min-h-screen max-w-5xl items-center gap-12 px-6 py-12 md:grid-cols-2">
+        <div>
+          <Link to="/" className="mb-8 inline-flex items-center gap-2">
+            <div className="brand-bg grid h-9 w-9 place-items-center rounded-xl text-white shadow-[0_4px_12px_rgba(109,94,252,0.35)]">
+              <Wand2 size={18} />
+            </div>
+            <span className="brand-text text-xl font-extrabold">chchar</span>
+          </Link>
+          <h1 className="text-3xl font-extrabold leading-tight md:text-4xl">
+            <span className="brand-text">로그인</span>하고<br /> 첫 Pawn을 만들어 보세요
+          </h1>
+          <p className="mt-3 max-w-sm text-sm text-[var(--color-dim)]">
+            MVP 단계라 이메일만 입력하면 바로 들어갈 수 있어요. 구글 OAuth는 곧 추가될 예정.
+          </p>
+        </div>
+
+        <div className="card p-8">
+          <h2 className="text-lg font-bold">계정으로 들어가기</h2>
+          <p className="mt-1 text-sm text-[var(--color-dim)]">이메일을 입력하면 자동 가입/로그인 됩니다.</p>
+
+          <form className="mt-5 space-y-3" onSubmit={submit}>
+            <label className="label">이메일</label>
+            <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" className="input" />
+            <Button type="submit" className="w-full"><Mail size={15} /> 이메일로 시작 <ArrowRight size={14} /></Button>
+          </form>
+
+          <div className="my-5 flex items-center gap-3 text-xs text-[var(--color-faint)]">
+            <div className="h-px flex-1 bg-[var(--color-line)]" /> 또는 <div className="h-px flex-1 bg-[var(--color-line)]" />
           </div>
-          <h1 className="mt-4 text-2xl font-extrabold">chchar 시작하기</h1>
-          <p className="mt-2 text-sm text-[var(--color-dim)]">
-            아이디어 한 줄로 픽셀 게임을 만들고 공유하세요.
-          </p>
-          <Button onClick={go} variant="ghost" className="mt-6 w-full">
-            <svg width="17" height="17" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.5 12.2c0-.7-.1-1.4-.2-2H12v3.9h5.9c-.3 1.4-1 2.5-2.2 3.3v2.8h3.6c2.1-2 3.2-4.8 3.2-8z"/><path fill="#34A853" d="M12 23c2.9 0 5.4-1 7.2-2.7l-3.6-2.8c-1 .7-2.3 1.1-3.6 1.1-2.8 0-5.1-1.9-6-4.4H2.3v2.9C4.1 20.6 7.8 23 12 23z"/><path fill="#FBBC05" d="M6 14.1c-.2-.7-.4-1.4-.4-2.1s.1-1.4.4-2.1V7H2.3C1.5 8.5 1 10.2 1 12s.5 3.5 1.3 5z"/><path fill="#EA4335" d="M12 5.5c1.6 0 3 .5 4.1 1.6l3.1-3.1C17.4 2.1 14.9 1 12 1 7.8 1 4.1 3.4 2.3 7l3.7 2.9c.9-2.6 3.2-4.4 6-4.4z"/></svg>
-            Google로 계속하기
+
+          <Button variant="ghost" className="w-full" disabled>
+            <KeyRound size={15} /> Google로 시작 (곧)
           </Button>
-          <p className="mt-3 text-xs text-[var(--color-faint)]">
-            목업 — 클릭하면 데모 계정(김구현)으로 로그인됩니다.
+
+          <p className="mt-6 text-center text-xs text-[var(--color-faint)]">
+            계정을 만들면 chchar 서비스 약관과 개인정보 처리방침에 동의합니다.
           </p>
-        </Card>
+        </div>
       </div>
     </div>
   )

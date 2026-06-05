@@ -1,53 +1,63 @@
-# chchar — DB ERD (서비스 버전 v2)
+# chchar — DB ERD (서비스 버전 v5 · paper-doll Pawn · WebGPU 추론)
 
-> 멀티유저 **서비스** 전제 + **생성은 각 사용자의 개인 GPU(로컬 ComfyUI)**.
-> 이전 로컬 단일사용자 초안(8테이블)을 대체. 백엔드 = **FastAPI + SQLModel + PostgreSQL**.
+> 멀티유저 **서비스**. 제품 = decal-atlas / paper-doll **Pawn** 시스템(RimWorld·Battle Brothers·
+> Wildermyth·Armello 톤). 캐릭터 = 분리된 **투명 파츠(atlas)** 를 타원 몸체에 얹어 조립하고,
+> 방향은 **8장 이미지가 아니라 방향별 레이어/좌표/스케일 규칙**으로 표현. 모션은 코드(squash/
+> stretch·bobbing·weapon swing). 여러 장르(클릭·디펜스·서바이버·탑다운RPG·전술)에 재사용.
+> 백엔드 = **FastAPI + SQLModel + MariaDB**(mysql+pymysql, utf8mb4).
 
-## 설계 원칙 (무엇이 어디 사나)
+## 역할 분담 (무엇이 어디서)
 
-| 데이터 | 사는 곳 | 이유 |
+| 영역 | 위치 | 이유 |
 |---|---|---|
-| 계정·메타·공유·소셜 | **클라우드 DB** | 가볍고 우리가 보관 |
-| 이미지 **생성(GPU)** | **사용자 개인 ComfyUI** | 무겁고 비용 0, 사용자 것 |
-| 생성된 **PNG 파일** | **클라우드 스토리지(S3/R2)** | 공유하려면 결과물은 우리가 보관해야 함 |
+| 파츠 **생성(추론)** | **사용자 브라우저 WebGPU** (web-stable-diffusion / transformers.js / onnxruntime-web) | 사용자 GPU 직접 사용. 무설치·즉시·안전(로컬호스트 CSRF 없음). 서버 GPU 비용 0 |
+| 워크플로우·모델 메타 | **서버 DB**(`workflow` 테이블) | 운영자가 만든 프리셋(프롬프트 템플릿·LoRA·후처리)을 서버가 배포 |
+| 파츠 **조립·방향·애니메이션** | **브라우저** (2D 합성 + 코드) | 가벼움 |
+| 계정·라이브러리·메타·소셜 | **클라우드 DB** | 공유용 |
+| 파츠/썸네일 **PNG 파일** | **오브젝트 스토리지(S3/R2)** | 결과물은 우리가 보관 |
+
+## 환경 가정 (★ 7차 핵심 제약)
+- **타깃 VRAM = 8GB** (일반 사용자, RTX 3060/4060·M1/M2 통합 8GB 기준)
+- 베이스 모델 = **SD1.5 / SD1.5-LCM / SDXL-Turbo 양자화** 등 **8GB 안에서 도는 것**만
+- **FLUX·SDXL 풀해상도·대형 모델은 제외** (브라우저 WebGPU 한계로 못 돎)
+- 그래도 `workflow.api_json`은 ComfyUI API-format 호환 형식으로 받아 두고, 브라우저 런타임이 핵심 노드(model/lora/sampler/post)만 해석·실행
 
 ## 확정 결정
-1. GPU 연동 = **브라우저 오케스트레이션** (서비스가 GPU를 직접 안 찌름, 브라우저가 다리)
-2. 결과 파일 = **클라우드 스토리지** (DB엔 URL만)
-3. 태그 = **별도 테이블** (전역 검색)
-4. 결제·플랜 = **MVP 제외**, 나중에
-5. 스택 = **FastAPI + SQLModel + PostgreSQL**
+1. 생성 = **사용자 브라우저 WebGPU 추론** + **서버는 워크플로우 정의(JSON)·모델 메타만 보관**. 사용자 PC에 ComfyUI 설치 안 시킴, 서버에 GPU도 안 띄움
+2. 핵심 3엔티티 = **`asset_part`(파츠 원자) · `pawn`(조립체) · `pawn_template`(방향 규칙)**
+3. 방향 = **이미지 8장 아님**, `pawn_template.direction_rules`(JSON)로 레이어/좌표/스케일 표현
+4. 결과 파일 = **스토리지**, DB엔 URL만
+5. 서버 큐 없음 → 생성 진행상황은 **클라이언트 상태**(generation_job 테이블 폐기)
+6. 결제·플랜·크레딧 = **MVP 제외**
 
-## 생성 흐름 (브라우저 오케스트레이션)
+## 생성·조립 흐름
 ```
-브라우저(S1 제출) → POST /jobs  (generation_job: queued)
-→ 같은 브라우저가 localhost ComfyUI /prompt 호출 + /ws 진행률 → S2 갱신
-→ 완성 PNG를 스토리지 업로드 → POST /assets (asset: storage_url) → S3 갤러리
-※ 서비스는 GPU 미접근. 헤드리스/폰 트리거가 필요해지면 gpu_node에 로컬 에이전트(폴링) 추가.
+[생성] 브라우저 → 서버에서 workflow 정의(JSON) + 모델 가중치 URL 받기
+   → 가중치 캐시(IndexedDB/Cache API) → 브라우저 WebGPU 파이프라인이 추론(SD1.5 등)
+   → 투명화(RMBG WebGPU/ONNX) → 결과 PNG → 서버 업로드(presigned URL → S3/R2)
+   → asset_part 행 생성
+[조립] 브라우저: pawn_template(슬롯+방향규칙) + asset_part 들 → Pawn 합성
+   → 방향(N/NE/E/…)은 direction_rules로, 모션은 코드
+[배치] scene.placements 에 pawn/tile/prop 좌표 배치 → 장르별 플레이
 ```
 
 ---
 
-## ER 다이어그램 (MVP 13테이블)
+## ER 다이어그램 (MVP 12테이블)
 
 ```mermaid
 erDiagram
-  user           ||--o{ oauth_account   : ""
-  user           ||--o{ gpu_node        : "내 ComfyUI 등록"
-  gpu_node       ||--o{ installed_model : "깔린 모델"
-  user           ||--o{ style_preset    : "owner(null=공식)"
-  user           ||--o{ generation_job  : ""
-  gpu_node       ||--o{ generation_job  : "dispatch"
-  style_preset   ||--o{ generation_job  : ""
-  generation_job ||--o{ asset           : ""
-  user           ||--o{ asset           : "owner"
-  asset          ||--o{ asset_tag       : ""
-  tag            ||--o{ asset_tag       : ""
-  user           ||--o{ scene           : "owner"
-  asset          ||--o{ scene           : "character/background"
-  user           ||--o{ like            : ""
-  user           ||--o{ comment         : ""
-  scene          ||--o{ play_record     : ""
+  user          ||--o{ oauth_account : ""
+  user          ||--o{ asset_part    : "owner(null=공식 라이브러리)"
+  workflow      ||--o{ asset_part    : "source"
+  user          ||--o{ pawn          : "owner"
+  pawn_template ||--o{ pawn          : "template"
+  asset_part    ||--o{ part_tag      : ""
+  tag           ||--o{ part_tag      : ""
+  user          ||--o{ scene         : "owner"
+  user          ||--o{ like          : ""
+  user          ||--o{ comment       : ""
+  scene         ||--o{ play_record   : ""
 
   user {
     int    id PK
@@ -57,76 +67,64 @@ erDiagram
     string avatar_url
     string plan "free(기본)"
   }
-  gpu_node {
+  workflow {
     int    id PK
-    int    user_id FK
-    string label
-    string comfy_url "보통 localhost:8188"
-    string status "online|offline"
-    datetime last_seen_at
-  }
-  installed_model {
-    int    id PK
-    int    gpu_node_id FK
-    string kind "checkpoint|lora|vae"
-    string name
-  }
-  style_preset {
-    int    id PK
-    int    owner_id FK "null=공식 시드"
-    string name
-    string role "char|bg|platform"
-    string checkpoint
-    string lora "nullable"
+    string name UK
+    string purpose "pawn_atlas|weapon|tile|prop|effect|style_ref|bg_remove"
+    string base_model "sd15|sd15-lcm|sdxl-turbo-int8 (8GB VRAM 안)"
+    json   api_json "ComfyUI API-format 호환 (브라우저 런타임이 해석)"
+    json   param_map
     string prompt_prefix
     string prompt_suffix
     string negative_prompt
-    string sampler
-    int    steps
-    float  cfg
-    int    width
-    int    height
-    json   postprocess
+    int    version
     bool   is_active
-    bool   is_public
   }
-  generation_job {
+  asset_part {
     int    id PK
-    int    user_id FK
-    int    gpu_node_id FK "nullable"
-    int    preset_id FK
-    string user_prompt
-    int    batch_size
-    string status "queued|expanding|generating|postprocessing|tagging|done|failed"
-    string comfy_prompt_id "nullable"
-    float  progress
-    string error "nullable"
-  }
-  asset {
-    int    id PK
-    int    owner_id FK
-    int    job_id FK "nullable"
-    int    preset_id FK "역정규화"
-    string role
-    string raw_url "스토리지"
-    string processed_url
+    int    owner_id FK "null=공식 라이브러리"
+    string kind "body|face_front|face_side|face_back|hair_*|helmet_*|weapon|shield|cape|faction_mark|shadow|tile|prop|effect"
+    string name
+    string url "투명 PNG 스토리지"
     string thumbnail_url
     int    width
     int    height
-    float  anchor_x
+    float  anchor_x "합성 피벗"
     float  anchor_y
+    bool   transparent
+    int    source_workflow_id FK "nullable"
+    string prompt
     int    seed
-    string prompt "concept 흡수"
-    string status "ok|bg_removal_failed|normalize_failed"
-    bool   favorite
+    string status "ok|bg_removal_failed"
+    bool   is_public
+  }
+  pawn_template {
+    int    id PK
+    string name UK "humanoid|quadruped"
+    json   slots "사용할 슬롯 목록"
+    json   direction_rules "방향별 레이어/좌표/스케일/표시"
+    json   base_shape "타원 몸체 파라미터"
+    bool   is_active
+  }
+  pawn {
+    int    id PK
+    int    owner_id FK
+    int    template_id FK
+    string name
+    string body_color
+    string faction_color
+    float  scale
+    json   composition "{slot: part_id}"
+    json   tints "{slot: #rrggbb}"
+    string thumbnail_url
     bool   is_public
   }
   tag {
     int    id PK
     string name UK
   }
-  asset_tag {
-    int asset_id FK
+  part_tag {
+    int part_id FK
     int tag_id FK
   }
   scene {
@@ -134,13 +132,10 @@ erDiagram
     int    owner_id FK
     string name
     string description
-    int    character_asset_id FK
-    int    background_asset_id FK
-    json   config "중력·점프·속도·캔버스"
-    json   placements "플랫폼+에너미+함정(kind 구분)"
-    json   player_start "x,y"
-    json   goal "x,y"
-    string visibility "public|private"
+    string genre "click|defense|survivor|topdown_rpg|tactical"
+    json   config "장르별 설정·캔버스"
+    json   placements "[{kind:pawn|tile|prop, ref_id, x, y, direction, scale}]"
+    bool   is_public "part·pawn 과 통일"
     string thumbnail_url
     int    play_count
     int    like_count
@@ -148,7 +143,7 @@ erDiagram
   like {
     int    id PK
     int    user_id FK
-    string target_type "asset|scene"
+    string target_type "part|pawn|scene"
     int    target_id
   }
   comment {
@@ -174,23 +169,27 @@ erDiagram
 
 | 그룹 | 테이블 | 역할 |
 |---|---|---|
-| **계정** | `user`, `oauth_account` | 구글 로그인·프로필 |
-| **개인 GPU ★** | `gpu_node`, `installed_model` | 내 ComfyUI 등록 + 깔린 모델(프리셋 호환 검증) |
-| **생성** | `style_preset`, `generation_job`, `asset`, `tag`, `asset_tag` | 레시피 → 주문 → 결과(스토리지 URL) → 태그 |
-| **레벨** | `scene` | 공유 가능한 씬(placements=JSON, public/private) |
+| **계정** | `user`, `oauth_account` | 로그인·프로필 |
+| **생성 템플릿** | `workflow` | SD1.5/LCM 등 8GB VRAM용 워크플로우 프리셋(목적별). 서버 보관, 브라우저 WebGPU에서 실행 |
+| **파츠 ★** | `asset_part` | 투명 PNG 파츠 원자(slot/kind). owner null=공식 라이브러리 |
+| **Pawn ★** | `pawn`, `pawn_template` | 조립 캐릭터 + 방향 규칙("이미지 아니라 규칙") |
+| **태깅** | `tag`, `part_tag` | 파츠 전역 검색 |
+| **씬** | `scene` | Pawn·타일·prop 배치(장르별 보드/레벨) |
 | **소셜** | `like`, `comment`, `play_record` | 좋아요·댓글·플레이 기록 |
 
-→ **MVP 13테이블.** (Django 안 쓰고 FastAPI라 프레임워크 auth 테이블 없음 — user/oauth 직접 관리)
+→ **MVP 12테이블.** (FastAPI라 프레임워크 auth 테이블 없음 — user/oauth 직접 관리)
 
-## 로컬 단일사용자 초안 대비 변경점
-- `concept` 삭제 → `asset.prompt` 흡수 · `generation_job` 유지(서비스는 이력/쿼터/디스패치 필요)
-- 모든 핵심 테이블에 **`owner_id`** 추가 (멀티유저)
-- `asset` 파일경로 → **스토리지 URL**(raw/processed/thumbnail_url)
-- `scene_platform`/`scene_entity` 삭제 → `scene.placements`(JSON) 통합
-- **신규**: `gpu_node`, `installed_model`(개인 GPU), `like`/`comment`/`play_record`(소셜)
+## v4(사용자 PC ComfyUI) 대비 v5 변경점
+- **DB**: PostgreSQL → **MariaDB**(mysql+pymysql, utf8mb4)
+- **추론 위치**: 사용자 PC ComfyUI(설치 필요) → **브라우저 WebGPU**(설치 0)
+- **베이스 모델**: FLUX.2 Klein 4B(16GB) → **SD1.5/LCM**(8GB VRAM 한계)
+- **workflow.api_json**: ComfyUI가 직접 실행 → ComfyUI API-format 호환 JSON을 **브라우저 런타임이 해석·실행**
+
+## v2(BYO-GPU 플랫포머) 대비 누적 변경점
+- **삭제**: `gpu_node`·`installed_model`(로컬 GPU 등록), `generation_job`(서버 큐 없음), `style_preset`·`asset`·`asset_tag`(픽셀 스프라이트 모델)
+- **신설**: `workflow`(워크플로우 프리셋), `asset_part`(파츠 원자), `pawn`·`pawn_template`(조립체·방향규칙), `part_tag`
+- 제품 = 픽셀 플랫포머 → **paper-doll Pawn**(다장르 토큰). 플랫포머 옆모습은 MVP 제외
+- 생성 위치 = (구)브라우저 오케스트레이션·(v3)서버GPU·(v4)사용자ComfyUI → **(v5)브라우저 WebGPU**
 
 ## 나중 확장 (MVP 제외)
-`plan`/`subscription`(스토리지·공개레벨 한도), `notification`, `report`(신고), `follow`, `collection`(즐겨찾기 묶음), 로컬 에이전트(폰/헤드리스 트리거).
-
-## 좌표 계약 (유지)
-S5 배치 = S6 Phaser 월드좌표 1:1 (`frontend/src/lib/coords.ts`). 서버 무관, `scene.placements` 좌표가 그대로 플레이에 쓰임. 실측 통과(지면 y=688 → 발 착지 688).
+`plan`/`subscription`·`credit_ledger`, `pawn_animation_clip`(저장 모션), `notification`, `report`, `follow`, `collection`(파츠 묶음/팩).

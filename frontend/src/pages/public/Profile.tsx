@@ -1,60 +1,66 @@
-import { useParams, useNavigate } from 'react-router-dom'
-import { Gamepad2, Images } from 'lucide-react'
-import { useStudio } from '../../store/studio'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { User as UserIcon } from 'lucide-react'
 import Avatar from '../../ui/Avatar'
-import Badge from '../../ui/Badge'
-import LevelCard from '../../components/LevelCard'
-import AssetCard from '../../components/AssetCard'
 import EmptyState from '../../ui/EmptyState'
+import Button from '../../ui/Button'
+import PawnCard from '../../components/PawnCard'
+import SceneCard from '../../components/SceneCard'
+import PartCard from '../../components/PartCard'
+import { useStudio } from '../../store/studio'
 
 export default function Profile() {
   const { handle } = useParams()
   const navigate = useNavigate()
   const users = useStudio((s) => s.users)
-  const levels = useStudio((s) => s.levels)
-  const assets = useStudio((s) => s.assets)
+  const parts = useStudio((s) => s.parts)
+  const pawns = useStudio((s) => s.pawns)
+  const scenes = useStudio((s) => s.scenes)
 
   const user = users.find((u) => u.handle === handle)
   if (!user) {
-    return <EmptyState icon={Gamepad2} title="프로필을 찾을 수 없어요" desc={`@${handle}`} />
+    return <EmptyState icon={UserIcon} title="사용자를 찾을 수 없어요" action={<Link to="/"><Button>홈으로</Button></Link>} />
   }
-  const myLevels = levels.filter((l) => l.ownerId === user.id && l.visibility === 'public')
-  const myAssets = assets.filter((a) => a.ownerId === user.id && a.isPublic)
+  const myParts = parts.filter((p) => p.ownerId === user.id && p.isPublic)
+  const myPawns = pawns.filter((p) => p.ownerId === user.id && p.isPublic)
+  const myScenes = scenes.filter((s) => s.ownerId === user.id && s.isPublic)
 
   return (
     <div>
-      <div className="mb-8 flex items-center gap-4">
+      <div className="card mb-8 flex items-center gap-5 p-6">
         <Avatar name={user.displayName} src={user.avatarUrl} size={72} />
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-extrabold">{user.displayName}</h1>
-            <Badge color={user.plan === 'pro' ? '#6d5efc' : undefined}>{user.plan === 'pro' ? 'Pro' : 'Free'}</Badge>
-          </div>
+          <h1 className="text-2xl font-bold">{user.displayName}</h1>
           <div className="text-sm text-[var(--color-dim)]">@{user.handle}</div>
-          <div className="mt-1 text-[13px] text-[var(--color-faint)]">레벨 {myLevels.length} · 에셋 {myAssets.length}</div>
+          <div className="mt-2 flex gap-3 text-xs text-[var(--color-dim)]">
+            <span><b className="text-[var(--color-ink)]">{myPawns.length}</b> Pawn</span>
+            <span><b className="text-[var(--color-ink)]">{myParts.length}</b> 파츠</span>
+            <span><b className="text-[var(--color-ink)]">{myScenes.length}</b> 씬</span>
+          </div>
         </div>
       </div>
 
       <section className="mb-10">
-        <h2 className="mb-3 flex items-center gap-1.5 text-lg font-bold"><Gamepad2 size={18} className="text-[var(--color-primary)]" /> 공개 레벨</h2>
-        {myLevels.length ? (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {myLevels.map((l) => <LevelCard key={l.id} level={l} onOpen={() => navigate(`/level/${l.id}`)} />)}
-          </div>
-        ) : (
-          <p className="text-sm text-[var(--color-faint)]">아직 공개 레벨이 없어요.</p>
-        )}
+        <h2 className="mb-3 text-lg font-bold">공개 Pawn</h2>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+          {myPawns.map((p) => <PawnCard key={p.id} pawn={p} onClick={() => navigate(`/pawn/${p.id}`)} />)}
+          {!myPawns.length && <p className="text-sm text-[var(--color-faint)]">아직 없음</p>}
+        </div>
+      </section>
+
+      <section className="mb-10">
+        <h2 className="mb-3 text-lg font-bold">공개 씬</h2>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {myScenes.map((s) => <SceneCard key={s.id} scene={s} onClick={() => navigate(`/scene/${s.id}`)} />)}
+          {!myScenes.length && <p className="text-sm text-[var(--color-faint)]">아직 없음</p>}
+        </div>
       </section>
 
       <section>
-        <h2 className="mb-3 flex items-center gap-1.5 text-lg font-bold"><Images size={18} className="text-[var(--color-accent)]" /> 공개 에셋</h2>
-        {myAssets.length ? (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-            {myAssets.map((a) => <AssetCard key={a.id} asset={a} />)}
-          </div>
-        ) : (
-          <p className="text-sm text-[var(--color-faint)]">아직 공개 에셋이 없어요.</p>
-        )}
+        <h2 className="mb-3 text-lg font-bold">공개 파츠</h2>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+          {myParts.map((p) => <PartCard key={p.id} part={p} />)}
+          {!myParts.length && <p className="text-sm text-[var(--color-faint)]">아직 없음</p>}
+        </div>
       </section>
     </div>
   )

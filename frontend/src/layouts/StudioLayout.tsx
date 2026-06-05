@@ -1,30 +1,33 @@
-import { Link, NavLink, Outlet } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import {
-  LayoutDashboard, Sparkles, ListChecks, Images, Blocks, Gamepad2,
-  SlidersHorizontal, Cpu, Workflow, Wand2, ArrowLeft, Scissors,
+  LayoutDashboard, Sparkles, Images, UserCog, Blocks, Map, ArrowLeft, Wand2,
+  Scissors, Settings, Users2,
 } from 'lucide-react'
 import { useStudio } from '../store/studio'
-import { userById } from '../mock/users'
 import Avatar from '../ui/Avatar'
+import VramHud from '../components/VramHud'
+import WebGpuGate from '../components/WebGpuGate'
 
 const NAV = [
   { to: '/studio', label: '대시보드', icon: LayoutDashboard, end: true },
-  { to: '/studio/generate', label: '생성', icon: Sparkles },
-  { to: '/studio/queue', label: '생성 큐', icon: ListChecks },
-  { to: '/studio/assets', label: '내 갤러리', icon: Images },
-  { to: '/studio/slicer', label: '스프라이트 슬라이서', icon: Scissors },
-  { to: '/studio/builder', label: '씬 조립기', icon: Blocks },
-  { to: '/studio/levels', label: '내 레벨', icon: Gamepad2 },
-  { to: '/studio/presets', label: '프리셋', icon: SlidersHorizontal },
-  { to: '/studio/pipeline', label: '파이프라인', icon: Workflow },
-  { to: '/studio/gpu', label: 'GPU 연결', icon: Cpu },
+  { to: '/studio/generate', label: '파츠 생성', icon: Sparkles },
+  { to: '/studio/slicer', label: '슬라이서', icon: Scissors },
+  { to: '/studio/parts', label: '파츠 라이브러리', icon: Images },
+  { to: '/studio/pawns', label: '내 Pawn', icon: Users2 },
+  { to: '/studio/pawn', label: 'Pawn 에디터', icon: UserCog },
+  { to: '/studio/scenes', label: '씬 빌더', icon: Blocks },
+  { to: '/studio/my-scenes', label: '내 씬', icon: Map },
+  { to: '/studio/settings', label: '설정', icon: Settings },
 ]
 
 export default function StudioLayout() {
-  const gpu = useStudio((s) => s.gpu)
-  const uid = useStudio((s) => s.currentUserId)
-  const user = uid ? userById(uid) : null
-  const online = gpu.status === 'online'
+  const user = useStudio((s) => s.currentUser)
+  const location = useLocation()
+
+  // 온보딩 페이지 자체는 게이트 없이
+  const isOnboarding = location.pathname.startsWith('/studio/onboarding')
+
+  const body = isOnboarding ? <Outlet /> : <WebGpuGate><Outlet /></WebGpuGate>
 
   return (
     <div className="flex min-h-screen">
@@ -59,20 +62,13 @@ export default function StudioLayout() {
         </nav>
 
         <div className="mt-2 space-y-2">
-          <Link
-            to="/studio/gpu"
-            className="flex items-center gap-2 rounded-xl border border-[var(--color-line)] px-3 py-2 text-[13px] transition hover:border-[var(--color-line2)]"
-          >
-            <span className={`dot ${online ? 'dot-on' : 'dot-off'}`} />
-            <span className="font-medium">{online ? 'GPU 온라인' : 'GPU 오프라인'}</span>
-            <Cpu size={14} className="ml-auto text-[var(--color-faint)]" />
-          </Link>
+          <VramHud />
           {user && (
             <Link to="/studio/settings" className="flex items-center gap-2 rounded-xl px-2 py-1.5 transition hover:bg-[var(--color-surface2)]">
               <Avatar name={user.displayName} src={user.avatarUrl} size={30} />
               <div className="min-w-0 leading-tight">
                 <div className="truncate text-[13px] font-semibold">{user.displayName}</div>
-                <div className="text-[11px] text-[var(--color-faint)]">{user.plan === 'pro' ? 'Pro' : 'Free'}</div>
+                <div className="text-[11px] text-[var(--color-faint)]">@{user.handle} · {user.plan === 'pro' ? 'Pro' : 'Free'}</div>
               </div>
             </Link>
           )}
@@ -82,9 +78,7 @@ export default function StudioLayout() {
         </div>
       </aside>
 
-      <main className="min-h-screen min-w-0 flex-1">
-        <Outlet />
-      </main>
+      <main className="min-h-screen min-w-0 flex-1">{body}</main>
     </div>
   )
 }

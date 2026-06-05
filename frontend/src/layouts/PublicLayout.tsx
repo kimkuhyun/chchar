@@ -1,7 +1,6 @@
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { Gamepad2, Wand2 } from 'lucide-react'
+import { Compass, Sparkles, Users2, LogOut, Wand2 } from 'lucide-react'
 import { useStudio } from '../store/studio'
-import { userById } from '../mock/users'
 import Avatar from '../ui/Avatar'
 import Button from '../ui/Button'
 
@@ -14,8 +13,8 @@ const navCls = ({ isActive }: { isActive: boolean }) =>
 
 export default function PublicLayout() {
   const navigate = useNavigate()
-  const uid = useStudio((s) => s.currentUserId)
-  const user = uid ? userById(uid) : null
+  const user = useStudio((s) => s.currentUser)
+  const logout = useStudio((s) => s.logout)
 
   return (
     <div className="min-h-screen">
@@ -28,17 +27,23 @@ export default function PublicLayout() {
             <span className="brand-text text-lg font-extrabold">chchar</span>
           </Link>
           <nav className="ml-4 hidden items-center gap-1 md:flex">
-            <NavLink to="/explore" className={navCls}>레벨 탐색</NavLink>
-            <NavLink to="/explore/assets" className={navCls}>에셋 탐색</NavLink>
+            <NavLink to="/explore" className={navCls}><Compass size={14} className="mr-1 inline" />Pawn 탐색</NavLink>
+            <NavLink to="/explore/parts" className={navCls}><Sparkles size={14} className="mr-1 inline" />파츠</NavLink>
+            <NavLink to="/explore/scenes" className={navCls}><Users2 size={14} className="mr-1 inline" />씬</NavLink>
           </nav>
           <div className="ml-auto flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => navigate('/studio')}>
-              <Gamepad2 size={16} /> 만들기
-            </Button>
             {user ? (
-              <button onClick={() => navigate('/studio')} title={user.displayName}>
-                <Avatar name={user.displayName} src={user.avatarUrl} size={34} />
-              </button>
+              <>
+                <Button variant="ghost" size="sm" onClick={() => navigate('/studio')}>
+                  <Wand2 size={15} /> 스튜디오
+                </Button>
+                <button onClick={() => navigate(`/u/${user.handle}`)} title={user.displayName}>
+                  <Avatar name={user.displayName} src={user.avatarUrl} size={34} />
+                </button>
+                <button title="로그아웃" onClick={logout} className="grid h-8 w-8 place-items-center rounded-lg text-[var(--color-dim)] hover:bg-[var(--color-surface2)]">
+                  <LogOut size={15} />
+                </button>
+              </>
             ) : (
               <Button size="sm" onClick={() => navigate('/login')}>로그인</Button>
             )}
